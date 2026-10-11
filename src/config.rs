@@ -168,16 +168,47 @@ pub struct LanAccessControl {
     pub proxy: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoutingSection {
-    #[serde(default)]
-    pub default_proxy: bool,
+    pub tproxy_fw_mark: String,
+    pub tproxy_fw_mask: String,
+    pub tun_fw_mark: String,
+    pub tun_fw_mask: String,
+    pub tproxy_rule_pref: i32,
+    pub tun_rule_pref: i32,
+    pub tproxy_route_table: String,
+    pub tun_route_table: String,
+    pub cgroup_id: String,
+    pub cgroup_name: String,
+    pub dummy_device: String,
+}
+
+impl Default for RoutingSection {
+    fn default() -> Self {
+        Self {
+            tproxy_fw_mark: "0x1".into(),
+            tproxy_fw_mask: "0x1".into(),
+            tun_fw_mark: "0x2".into(),
+            tun_fw_mask: "0x2".into(),
+            tproxy_rule_pref: 9000,
+            tun_rule_pref: 9001,
+            tproxy_route_table: "100".into(),
+            tun_route_table: "101".into(),
+            cgroup_id: "0x1234".into(),
+            cgroup_name: "nexa".into(),
+            dummy_device: "nexa-dummy".into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogSection {
     pub level: String,
     pub max_size_mb: i32,
+    #[serde(default)]
+    pub scheduled_clear: bool,
+    #[serde(default)]
+    pub scheduled_clear_cron: String,
 }
 
 impl Default for LogSection {
@@ -185,6 +216,8 @@ impl Default for LogSection {
         Self {
             level: "info".into(),
             max_size_mb: 10,
+            scheduled_clear: false,
+            scheduled_clear_cron: "0 0 * * *".into(),
         }
     }
 }
