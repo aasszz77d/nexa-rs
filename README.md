@@ -7,31 +7,30 @@
 
 ## 特性
 
-- 单二进制，内嵌完整 Web 管理面板（`src/web.rs` 一个文件包含全部 HTML/CSS/JS + API）
-- JWT 认证 + bcrypt 密码
-- 配置文件 / 配置文件管理（profiles）
+- **单文件网页面板**：`src/web.rs` 包含全部 HTML/CSS/JS + API 处理器
+- JWT 认证 + bcrypt 密码（默认 `admin` / `admin`）
+- 配置持久化（JSON）+ profiles 管理
 - 代理核心进程管理（sing-box / mihomo / xray 等）
-- 日志查看与清理
-- 子命令 `on` / `off`（网络规则占位，可扩展 nftables/iptables）
+- **网络规则管理**：tproxy / tun 路由、nftables DNS 劫持（`nexa on` / `nexa off`）
+- **定时调度**：定时重启核心、定时清空日志（内置 cron）
+- 局域网主机发现（DHCP 租约 + ARP/邻居表）
+- 日志查看与清理、调试诊断（ip rule / nft / ps）
 
 ## 快速开始
 
 ```bash
-# 编译
 cargo build --release
 
-# 运行（数据目录默认 ./data，Linux 下若存在 /etc/nexa 则用之）
+# 运行
 ./target/release/nexa -p 9990
 
 # 指定数据目录
 ./target/release/nexa -d /etc/nexa -p 9990
 
-# 仅应用/清理网络规则（当前为 stub）
+# 仅应用 / 清理网络规则
 ./target/release/nexa on
 ./target/release/nexa off
 ```
-
-默认账号：`admin` / `admin`
 
 浏览器访问：`http://<host>:9990`
 
@@ -39,24 +38,32 @@ cargo build --release
 
 ```
 src/
-  main.rs      # 入口、路由
-  web.rs       # ★ 网页面板 + 全部 API 处理器（单文件）
-  config.rs    # 配置模型
-  auth.rs      # 认证
-  store.rs     # 配置持久化
-  core.rs      # 代理核心进程管理
-  paths.rs     # 路径管理
+  main.rs         # 入口、路由、Boot 流程
+  web.rs          # ★ 网页面板 + 全部 API（单文件）
+  config.rs       # 配置模型（对齐原 UCI）
+  auth.rs         # JWT + bcrypt
+  store.rs        # 配置 / profiles 持久化
+  core.rs         # 代理核心进程管理
+  netmanager.rs   # 网络规则（ip rule / nftables）
+  scheduler.rs    # 定时重启 / 清日志
+  hosts.rs        # 局域网主机发现
+  logger.rs       # 应用日志
+  paths.rs        # 路径管理
 ```
 
-## 与原版 Go nexa 的对应关系
+## API 概览
 
-| 原版 | Rust 版 |
-|------|---------|
-| chi + embed web | axum + 单文件嵌入 |
-| bbolt 存储 | JSON 文件 |
-| JWT auth | jsonwebtoken + bcrypt |
-| netmanager (nft/iptables) | stub（可扩展） |
-| core 进程管理 | std::process::Command |
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | /api/auth/login | 登录 |
+| GET/PUT | /api/config | 读写配置 |
+| POST | /api/config/apply | 应用配置（重启核心 + 网络） |
+| POST | /api/start \| stop \| restart | 启停核心 |
+| POST | /api/net/on \| off | 单独应用/清理网络规则 |
+| GET/PUT/DELETE | /api/profiles/:name | 配置文件管理 |
+| GET | /api/logs/app \| core | 日志 |
+| GET | /api/hosts | 局域网主机 |
+| POST | /api/debug | 诊断（ip_rule / nft / ps） |
 
 ## License
 
