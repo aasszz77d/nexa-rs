@@ -1,6 +1,7 @@
 //! Core process manager (proxy binary lifecycle).
 
 use crate::config::Config;
+use crate::logger::Logger;
 use crate::paths;
 use crate::store::Store;
 use parking_lot::Mutex;
@@ -10,13 +11,15 @@ use tracing::{info, warn};
 
 pub struct CoreManager {
     store: Arc<Store>,
+    log: Arc<Logger>,
     child: Mutex<Option<Child>>,
 }
 
 impl CoreManager {
-    pub fn new(store: Arc<Store>) -> Self {
+    pub fn new(store: Arc<Store>, log: Arc<Logger>) -> Self {
         Self {
             store,
+            log,
             child: Mutex::new(None),
         }
     }
@@ -63,6 +66,8 @@ impl CoreManager {
         let dst = paths::run_dir().join(&profile_name);
         if src.exists() {
             let _ = std::fs::copy(&src, &dst);
+        } else {
+            self.log.app("核心", &format!("配置文件 {} 不存在于 profiles，尝试直接使用", profile_name));
         }
 
         let args_tpl = if cfg.config.run_args.is_empty() {
@@ -77,8 +82,12 @@ impl CoreManager {
 
         let args: Vec<&str> = args_str.split_whitespace().collect();
 
+        self.log.app("核心", &format!("启动: {} {}", binary, args_str));
         info!("Starting core: {} {}", binary, args_str);
 
+        if let Some(p) = paths::core_log_path().parent() {
+            let _ = std::fs::create_dir_all(p);
+        }
         let log_file = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -93,12 +102,15 @@ impl CoreManager {
 
         match child {
             Ok(c) => {
+                let pid = c.id();
                 *self.child.lock() = Some(c);
-                info!("Core started");
+                self.log.app("核心", &format!("已启动 (pid={})", pid));
+                info!("Core started pid={}", pid);
                 Ok(())
             }
             Err(e) => {
                 warn!("Failed to start core {}: {}", binary, e);
+                self.log.app("核心", &format!("启动失败: {}", e));
                 Err(anyhow::anyhow!("failed to spawn {}: {}", binary, e))
             }
         }
@@ -107,8 +119,10 @@ impl CoreManager {
     pub async fn stop(&self) -> anyhow::Result<()> {
         let mut guard = self.child.lock();
         if let Some(mut c) = guard.take() {
+            let pid = c.id();
             let _ = c.kill();
             let _ = c.wait();
+            self.log.app("核心", &format!("已停止 (pid={})", pid));
             info!("Core stopped");
         }
         Ok(())
